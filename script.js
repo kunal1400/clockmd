@@ -4,16 +4,18 @@ function updateOption(e) {
 	if (targetOptionGroup) {
 		jQuery("select.apt_time").find(`option`).show()
 		jQuery("select.apt_time").find(`option[data-target-date=${targetOptionGroup}]`).hide()
-		jQuery("select.apt_time option[value='0']").prop("selected",true);
+		jQuery("select.apt_time option:first").prop("selected",true);
 	}
 }
 
 function changeReason(e) {
 	let reasonId = jQuery(e).val()
 	if (reasonId) {
-		let newUrl = updateQueryStringParameter(window.location.href, 'reasonId', reasonId)
-		console.log(reasonId, newUrl)
-		window.location.href = newUrl
+    let newUrl = updateQueryStringParameter(window.location.href, 'reasonId', reasonId)
+		let latUrl = updateQueryStringParameter(newUrl, 'af', "#AppointmentFormWrapper")
+		// window.location.href = newUrl+"#AppointmentFormWrapper"
+		console.log(reasonId, latUrl)
+    window.location.href = latUrl
 	}
 }
 

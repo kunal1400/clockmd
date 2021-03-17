@@ -16,6 +16,7 @@ class Clockmd {
 
 	private $authtoken = AUTH_TOKEN;
 	private $apiurl = API_URL;
+	private $clockwiselogo = 'https://s3.amazonaws.com/urgentq_production/uploads/hospital/logo/2681/Community_Family_Urgent_Care_Logo_-_Large-01.png';
 
 	/** Refers to a single instance of this class. */
     private static $instance = null;
@@ -99,12 +100,19 @@ class Clockmd {
 			
 			// Calling the create appointment API
 			$createAppointmentRes = $this->post_with_authorization('/appointments/create', $createAppointmentData);
-
+			
 			if ( is_array($createAppointmentRes) && count($createAppointmentRes) > 0 ) {
-				$msg = "Appointment confirmed your";
-				$msg .= " confirmation code is ".$createAppointmentRes['confirmation_code'];
-				$msg .= " and appointment queue id is ".$createAppointmentRes['appointment_queue_id'];
-				wp_redirect("?action=appointmentcreated&msg=$msg");
+				if ( isset($createAppointmentRes['error']) ) {
+					wp_redirect("?action=createappointment&errmsg=".$createAppointmentRes['error']."&hospital=".$createAppointmentData['hospital_id']);
+				}
+				else {
+					// Appointment confirmed for this clinic name at this date at this time
+					$msg = "Appointment confirmed for ".$createAppointmentData['hospital_name'];
+					$msg .= " at ".date( "m/d/Y H:i:s", strtotime($createAppointmentData['apt_time']) );
+					$msg .= " and your confirmation code is ".$createAppointmentRes['confirmation_code'];
+					$msg .= " and appointment queue id is ".$createAppointmentRes['appointment_queue_id'];
+					wp_redirect("?action=appointmentcreated&msg=$msg");
+				}				
 				exit;
 			}
 		}
@@ -124,10 +132,9 @@ class Clockmd {
 		// If appointmentcreated and msg is set then show notification bar
 		if ( !empty($_GET['action']) && $_GET['action'] == 'appointmentcreated' && !empty($_GET['msg']) ) {
 			$str .= '<div class="alert alert-success" role="alert">'.$_GET['msg'].'</div>';
-		}
+		}		
 
 		if ( !empty($_GET['action']) && $_GET['action'] == 'createappointment' && !empty($_GET['hospital']) ) {
-
 			$hospitalId = $_GET['hospital'];
 			$reasonId = 0;
 			if ( !empty($_GET['reasonId']) ) {
@@ -140,55 +147,71 @@ class Clockmd {
 			// #2. Getting the reasons Informations
 			$reasonDescription = "";
 			$reasons = $this->get_with_authorization( '/reasons?hospital_id='.$hospitalId );
-
-			// #3. Generating the reasons dropdown			
-			$select = '<select required onchange="changeReason(this)" class="form-control form-control-lg reason_description" name="appointment[reason_description]">';
-			if ( !empty($reasons['reasons']) && is_array($reasons['reasons']) ) {
-				foreach ($reasons['reasons'] as $i => $reason) {
-					if ($i == 0) {
-						$reasonDescription = $reason['description'];
-						$select .= '<option selected value="'.$reason['id'].'">'.$reason['description'].'</option>';
-					}
-					else if ( $reasonId == $reason['id'] ) {
-						$reasonDescription = $reason['description'];
-						$select .= '<option selected value="'.$reason['id'].'">'.$reason['description'].'</option>';
-					} 
-					else {
-						$select .= '<option value="'.$reason['id'].'">'.$reason['description'].'</option>';
+			
+			if ( !isset($reasons['error']) ) {
+				// #3. Generating the reasons dropdown
+				$select = '<select required onchange="changeReason(this)" class="form-control form-control-lg reason_description" name="appointment[reason_id]">';
+				if ( !empty($reasons['reasons']) && is_array($reasons['reasons']) ) {
+					foreach ($reasons['reasons'] as $i => $reason) {
+						if ($i == 0) {
+							$reasonDescription = $reason['description'];
+							$select .= '<option selected value="'.$reason['id'].'">'.$reason['description'].'</option>';
+						}
+						else if ( $reasonId == $reason['id'] ) {
+							$reasonDescription = $reason['description'];
+							$select .= '<option selected value="'.$reason['id'].'">'.$reason['description'].'</option>';
+						} 
+						else {
+							$select .= '<option value="'.$reason['id'].'">'.$reason['description'].'</option>';
+						}
 					}
 				}
+				$select .= '</select>';
+				$select .= '<input type="hidden" name="appointment[hospital_id]" value="'.$hospitalId.'" />';
+				$select .= '<input type="hidden" name="appointment[hospital_name]" value="'.$hospital['name'].'" />';
+
+				// #4. Getting the timeslots html			
+				$timeSlots = $this->get_hospital_available_times( $hospitalId, $reasonDescription );
+
+				$str .= "<div class='col-md-12'>
+						<img src='".$this->clockwiselogo."'>
+						<center>
+							<h4>".$hospital['name']."</h4>
+							<div>".$hospital['full_address']."</div>
+							<div>".$hospital['phone_number']."</div>
+							<p><div>Please Note: you can also try one of our other nearby clinics</div></p>
+							<p><div>Please complete the information below to hold a place in line!</div>
+							<div>Note that all times are estimates only.</div>
+							<div>But first, please make sure you don't <a href='https://www.911.gov/needtocallortext911.html' target='_blank'>need to call 911</a></div></p>
+						</center>
+					</div>";
+
+				// If appointmenterror and msg is set then show notification bar
+				if ( !empty($_GET['errmsg']) ) {
+					$str .= '<div class="alert alert-danger" role="alert">'.$_GET['errmsg'].'</div>';
+				}
+
+				$str .= $this->getAppointmentForm( $select, $timeSlots );	
 			}
-			$select .= '</select>';
-			$select .= '<input type="hidden" name="appointment[hospital_id]" value="'.$hospitalId.'" />';
-
-			// #4. Getting the timeslots html			
-			$timeSlots = $this->get_hospital_available_times( $hospitalId, $reasonDescription );
-
-			$str .= "<div class='col-md-12'>
-					<center>
-						<h4>".$hospital['name']."</h4>
-						<div>".$hospital['full_address']."</div>
-						<div>".$hospital['phone_number']."</div>
-						<p><div>Please Note: you can also try one of our other nearby clinics</div></p>
-						<p><div>Please complete the information below to hold a place in line!</div>
-						<div>Note that all times are estimates only.</div>
-						<div>But first, please make sure you don't <a href='https://www.911.gov/needtocallortext911.html' target='_blank'>need to call 911</a></div></p>
-						<p><b>Select a visit reason:</b></p>
-					</center>
-				</div>";
-
-			$str .= $this->getAppointmentForm( $select, $timeSlots );
+			else {
+				$str .= '<div class="col-md-12"><center>There are no times available for online scheduling right now. During normal office hours, just come in to the facility we will see you as a regular walk in.Note: This message will be shown when there are no online visit times available (the clinic is full past their configured time for online patients OR the clinic is closed).</center></div>';
+			}			
 		}
 		else {			
 			$hospitals = $this->get_with_authorization( '/hospitals?details=true' );
 			foreach ($hospitals as $i => $hospital) {
 				$str .= "<div class='col-md-4'>
-					<a href='?action=createappointment&hospital=".$hospital['id']."'><h4>".$hospital['name']."</h4></a>
-					<div>".$hospital['full_address']."</div>
-					<div>".$hospital['phone_number']."</div>
-				</div>";			
+					<div class='card'>
+						<img src='".$this->clockwiselogo."'>
+						<div class='card-body'>
+							<h5 class='card-title'><a href='?action=createappointment&hospital=".$hospital['id']."'>".$hospital['name']."</a></h5>
+							<p class='card-text align-center'>".$hospital['full_address']."</p>
+							<p class='card-text align-center'>".$hospital['phone_number']."</p>
+						</div>
+					</div>
+				</div>";
 			}
-		}		
+		}
 		$str .= "</div>";
 		$str .= "</div>";
 
@@ -197,30 +220,38 @@ class Clockmd {
 
 	function getAppointmentForm( $dropDown, $timeslots ) {
 		// date_default_timezone_set("Asia/Bangkok");
-		return '<div class="col-md-12">
+		return '<div id="AppointmentFormWrapper" class="col-md-12">
 			<form action="" method="post" onsubmitt="return getAppointmentData(this)">
 				<div class="form-group row">
-				    <div class="col-md-12">'.$dropDown.'</div>
+				    <div class="col-md-12">
+				    <label class="form-check-label"><b>Select a visit reason:</b></label>
+				    	'.$dropDown.'
+				    </div>
 			  	</div>
 				<div class="form-group row">
 				    <div class="col-md-6">
-				      <input required type="text" name="appointment[first_name]" class="form-control" placeholder="First name">
+				    	<label class="form-check-label">First Name</label>
+				      	<input required type="text" name="appointment[first_name]" class="form-control" placeholder="First name">
 				    </div>
 				    <div class="col-md-6">
-				      <input required type="text" name="appointment[last_name]" class="form-control" placeholder="Last name">
+				    	<label class="form-check-label">Last Name</label>
+				      	<input required type="text" name="appointment[last_name]" class="form-control" placeholder="Last name">
 				    </div>
 			  	</div>
 			  	'.$timeslots.'			  	
 			  	<div class="form-group row">
 				    <div class="col-md-6">
-				      <input required type="email" name="appointment[email]" class="form-control" placeholder="Email">
+				    	<label class="form-check-label">Email</label>
+				      	<input required type="email" name="appointment[email]" class="form-control" placeholder="Email">
 				    </div>
 				    <div class="col-md-6">
-				      <input type="tel" name="appointment[phone_number]" class="form-control" placeholder="111-222-3333" pattern="[0-9]{3}-[0-9]{3}-[0-9]{4}">
+				    	<label class="form-check-label">Phone Number</label>
+				      	<input type="tel" name="appointment[phone_number]" class="form-control" placeholder="111-222-3333" pattern="[0-9]{3}-[0-9]{3}-[0-9]{4}">
 				    </div>
 			  	</div>
 			  	<div class="form-group row">
 				    <div class="col-md-6">
+				    	<label class="form-check-label">Patient Type</label>
 				      	<select required class="form-control form-control-lg" name="appointment[is_new_patient]">
 							<option value="">Patient Type</option>
 							<option value="true">New Patient</option>
@@ -228,7 +259,8 @@ class Clockmd {
 						</select>
 				    </div>
 				    <div class="col-md-6">
-				      <input required type="date" name="appointment[dob]" class="form-control" placeholder="Date of Birth">
+				    	<label class="form-check-label">Date of Birth</label>				    	
+				      	<input required type="date" name="appointment[dob]" class="form-control">
 				    </div>
 			  	</div>
 			  	<div class="form-group row">
@@ -283,13 +315,15 @@ class Clockmd {
 		}
 
 		$timeSlotsHtml .= '<div class="form-group row">
-		    <div class="col-md-6">				    	
+		    <div class="col-md-6">
+				<label class="form-check-label">Appointment Date</label>
 		    	<select required onchange="updateOption(this)" class="form-control form-control-lg" name="appointment[days_from_today]">
 					<option data-targetOptionGroup="'.$todayTimeStamp.'" value="0">Today - '.$todayDate.'</option>
 					<option data-targetOptionGroup="'.$nextDayTimeStamp.'" value="1">Tomorrow - '.$nextDate.'</option>
 				</select>
 		    </div>
 		    <div class="col-md-6">
+		    	<label class="form-check-label">Appointment Time</label>
 		    	<select required class="form-control form-control-lg apt_time" name="appointment[apt_time]">
 		    		<option value="">-- Select --</option>
 		    		'.$timeOptions.'
