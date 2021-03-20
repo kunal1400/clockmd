@@ -180,14 +180,14 @@ class Clockmd {
 
 		if ( is_array($row) && count($row) > 0 ) {
 			// We don't need update now
-	    	$sql = "UPDATE $tblname SET ssf_wp_store='$storename', ssf_wp_address='$full_address', ssf_wp_city='$city', ssf_wp_state='$state', ssf_wp_country='$county', ssf_wp_zip='$zip', ssf_wp_latitude='$latitude', ssf_wp_longitude='$longitude', ssf_wp_phone='$phone_number', ssf_wp_ext_url='$externalUrl', ssf_wp_is_published='1' WHERE ssf_wp_store='$storename'";
+	    	$sql = "UPDATE $tblname SET ssf_wp_store='$storename', ssf_wp_address='$full_address', ssf_wp_city='$city', ssf_wp_state='$state', ssf_wp_country='$county', ssf_wp_zip='$zip', ssf_wp_latitude='$latitude', ssf_wp_longitude='$longitude', ssf_wp_phone='$phone_number', ssf_wp_ext_url='$externalUrl', ssf_wp_is_published='1', ssf_wp_tags='Clinic&#44;' WHERE ssf_wp_store='$storename'";
 	    	return $wpdb->query($sql);
 		} 
 		else {
 			/**
 			* Generating the query to insert game with all its levels
 			**/
-			$sql = "INSERT INTO $tblname (ssf_wp_store, ssf_wp_address, ssf_wp_city, ssf_wp_state, ssf_wp_country, ssf_wp_zip, ssf_wp_latitude, ssf_wp_longitude, ssf_wp_phone, ssf_wp_ext_url, ssf_wp_is_published) VALUES ('$storename','$full_address','$city','$state','$county','$zip','$latitude','$longitude', '$phone_number', '$externalUrl', '1')";
+			$sql = "INSERT INTO $tblname (ssf_wp_store, ssf_wp_address, ssf_wp_city, ssf_wp_state, ssf_wp_country, ssf_wp_zip, ssf_wp_latitude, ssf_wp_longitude, ssf_wp_phone, ssf_wp_ext_url, ssf_wp_is_published, ssf_wp_tags) VALUES ('$storename','$full_address','$city','$state','$county','$zip','$latitude','$longitude', '$phone_number', '$externalUrl', '1', 'Clinic&#44;')";
 			return $wpdb->query($sql);
 		}
 
