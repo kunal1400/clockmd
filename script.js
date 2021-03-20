@@ -1,4 +1,3 @@
-
 function updateOption(e) {
 	let targetOptionGroup = jQuery(e).find(':selected').attr('data-targetOptionGroup')
 	if (targetOptionGroup) {
@@ -88,3 +87,12 @@ function convertSerializeArrayToObject( serializeArray ) {
 //     cb(data)
 //   })
 // }
+
+// jQuery(document).ready(function(){
+//   var phones = [{ "mask": "(###) ###-####"}];
+//   jQuery('input[name="appointment[phone_number]"]').inputmask({
+//     mask: phones, 
+//     greedy: false, 
+//     definitions: { '#': { validator: "[0-9]", cardinality: 1}} 
+//   })
+// })

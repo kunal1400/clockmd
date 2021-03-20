@@ -1,0 +1,31 @@
+/**SCHEDULING CSS**/
+#cmc-locations-container.et_pb_row {
+	padding: 0px !important;
+	width: 100%;
+	max-width: 100%;
+}
+.card-body {
+	text-align: center;
+}
+div.card {
+	margin-bottom: 10px;
+}
+.card-body a.btn.btn-primary {
+	margin-top:5px;
+}
+#AppointmentFormWrapper input[type="text"],  #AppointmentFormWrapper input[type="email"], #AppointmentFormWrapper input[type="tel"], #AppointmentFormWrapper  input[type="date"] {
+	height:50px !important;
+}
+#AppointmentFormWrapper 
+div.col-md-12 {
+	text-align:center;
+}
+.page-id-1361 body:not(.et-tb) #main-content .container, body:not(.et-tb-has-header) #main-content .container {
+	padding-top: 0px !important;
+}
+div.alert.alert-success {
+	font-size: 17px;
+	font-weight: 600;
+	text-align:center;
+}
+/**END SCHEDULING CSS**/
