@@ -149,11 +149,28 @@ class Clockmd {
 			false 
 		);
 
-		wp_enqueue_script( "clockmd-script-js" );
 		/**********************************************************
 		* /END: Scripts for Hospital List with Google Map
 		**********************************************************/		
+		wp_enqueue_script( "clockmd-script-js" );
 	}	
+
+	public function getHopitalNameForGf( $hospitalName ) {
+		switch ($hospitalName) {
+			case 'HasletAvondaleUS287':
+				return 'HasletUS287';
+			break;
+			case 'McKinney':
+				return 'Mckinney';
+			break;
+			case 'Wichita Falls':
+				return 'WFalls';
+			break;
+			default:
+				return $hospitalName;
+			break;
+		}
+	}
 
 	public function populateDb($storename, $latitude, $longitude, $full_address, $phone_number, $externalUrl) {
 		global $table_prefix, $wpdb;
@@ -172,6 +189,7 @@ class Clockmd {
 			$stateAndZip = explode(" ", $addressArray[3]);
 
 			// Setting the params
+			$street = $addressArray[0];
 			$city 	= $addressArray[2];
 			$state 	= $stateAndZip[1];
 			$county = end($addressArray);
@@ -180,14 +198,14 @@ class Clockmd {
 
 		if ( is_array($row) && count($row) > 0 ) {
 			// We don't need update now
-	    	$sql = "UPDATE $tblname SET ssf_wp_store='$storename', ssf_wp_address='$full_address', ssf_wp_city='$city', ssf_wp_state='$state', ssf_wp_country='$county', ssf_wp_zip='$zip', ssf_wp_latitude='$latitude', ssf_wp_longitude='$longitude', ssf_wp_phone='$phone_number', ssf_wp_ext_url='$externalUrl', ssf_wp_is_published='1', ssf_wp_tags='Clinic&#44;' WHERE ssf_wp_store='$storename'";
+	    	$sql = "UPDATE $tblname SET ssf_wp_store='$storename', ssf_wp_address='$street', ssf_wp_city='$city', ssf_wp_state='$state', ssf_wp_country='$county', ssf_wp_zip='$zip', ssf_wp_latitude='$latitude', ssf_wp_longitude='$longitude', ssf_wp_phone='$phone_number', ssf_wp_ext_url='$externalUrl', ssf_wp_is_published='1', ssf_wp_tags='Clinic&#44;' WHERE ssf_wp_store='$storename'";
 	    	return $wpdb->query($sql);
 		} 
 		else {
 			/**
 			* Generating the query to insert game with all its levels
 			**/
-			$sql = "INSERT INTO $tblname (ssf_wp_store, ssf_wp_address, ssf_wp_city, ssf_wp_state, ssf_wp_country, ssf_wp_zip, ssf_wp_latitude, ssf_wp_longitude, ssf_wp_phone, ssf_wp_ext_url, ssf_wp_is_published, ssf_wp_tags) VALUES ('$storename','$full_address','$city','$state','$county','$zip','$latitude','$longitude', '$phone_number', '$externalUrl', '1', 'Clinic&#44;')";
+			$sql = "INSERT INTO $tblname (ssf_wp_store, ssf_wp_address, ssf_wp_city, ssf_wp_state, ssf_wp_country, ssf_wp_zip, ssf_wp_latitude, ssf_wp_longitude, ssf_wp_phone, ssf_wp_ext_url, ssf_wp_is_published, ssf_wp_tags) VALUES ('$storename','$street','$city','$state','$county','$zip','$latitude','$longitude', '$phone_number', '$externalUrl', '1', 'Clinic&#44;')";
 			return $wpdb->query($sql);
 		}
 
@@ -209,7 +227,9 @@ class Clockmd {
 			
 			// Getting the formdata
 			$createAppointmentData = $_POST['appointment'];
-			
+			$cmdhospitalName = explode(" - ", $createAppointmentData['hospital_name']);
+			$location = $this->getHopitalNameForGf( trim($cmdhospitalName[1]) );			
+
 			// Converting the date format into the api desired format
 			$createAppointmentData['dob'] = date( "m/d/Y", strtotime($createAppointmentData['dob']) );
 			
@@ -221,13 +241,25 @@ class Clockmd {
 					wp_redirect( "?action=appointment_error&errmsg=".$createAppointmentRes['error']."&hospital=".$createAppointmentData['hospital_id'] );
 				}
 				else {
-					date_default_timezone_set('America/Chicago');
+					/*date_default_timezone_set('America/Chicago');
 					// Appointment confirmed for this clinic name at this date at this time
 					$msg = "Appointment confirmed for ".$createAppointmentData['hospital_name'];
 					$msg .= " at ".date( "m/d/Y H:i:s A", strtotime($createAppointmentData['apt_time']) );
 					// $msg .= " and your confirmation code is ".$createAppointmentRes['confirmation_code'];
-					// $msg .= " and appointment queue id is ".$createAppointmentRes['appointment_queue_id'];
-					wp_redirect( "?action=appointment_created&msg=$msg&hospital=".$createAppointmentData['hospital_id'] );
+					// $msg .= " and appointment queue id is ".$createAppointmentRes['appointment_queue_id'];*/
+					$queryString = http_build_query(array(
+						'checkinid' => 'clockwise',
+						'Location' => $location,
+						'notifemail' => $createAppointmentData['email'],
+						'visitdate' => date( 'm-d-y', strtotime($createAppointmentData['apt_time']) ),
+						'sched' => date( 'h:i:s', strtotime($createAppointmentData['apt_time']) ),
+						'patstatus' => $createAppointmentData['is_new_patient'],
+						'patphone' => $createAppointmentData['phone_number'],
+						'fname' => $createAppointmentData['first_name'],
+						'lname' => $createAppointmentData['last_name'],
+						'patdob' => $createAppointmentData['dob']
+					));
+					wp_redirect( "https://forms.communitymedcare.com/?".$queryString );
 				}				
 				exit;
 			}
