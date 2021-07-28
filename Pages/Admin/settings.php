@@ -1,7 +1,7 @@
 <!-- This file should primarily consist of HTML with a little bit of PHP. -->
 <div class="wrap">	
-	<h1>ClockMd Pages</h1>
-	<p>On click of this button all the data from clockmd will be populate in super store finder plugin</p>
+	<h1>ClockWiseMd CommunityMedCare Imports</h1>
+	<p>Clicking this button will import all the data from ClockWiseMD and will populate in the Super Store Finder plugin. You only need to do this 1 time or when any information has been added or changed in ClockWiseMD.</p>
 	<hr/>
 	<?php 
 	if ( !empty($_GET['importclockmd']) && $_GET['importclockmd'] == 1 ) {

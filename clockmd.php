@@ -9,649 +9,661 @@ Author: Kunal Malviya
 
 include 'env.php';
 
-/**
- * 
- */
-class Clockmd {
+class Clockmd
+{
 
-	private $authtoken = AUTH_TOKEN;
-	private $apiurl = API_URL;
-	private $clockwiselogo = 'https://s3.amazonaws.com/urgentq_production/uploads/hospital/logo/2681/Community_Family_Urgent_Care_Logo_-_Large-01.png';
+  private $authtoken = AUTH_TOKEN;
+  private $apiurl = API_URL;
+  private $clockwiselogo = 'https://s3.amazonaws.com/urgentq_production/uploads/hospital/logo/2681/Community_Family_Urgent_Care_Logo_-_Large-01.png';
 
-	/** Refers to a single instance of this class. */
-    private static $instance = null;
+  /** Refers to a single instance of this class. */
+  private static $instance = null;
 
-    /**
-     * Creates or returns an instance of this class.
-     *
-     * @return  WooRevo_pro_AttInfo A single instance of this class.
-     */
-    public static function get_instance() {
-        if ( null == self::$instance ) {
-        	self::$instance = new self;
-        }
-        return self::$instance;  
+  /**
+   * Creates or returns an instance of this class.
+   *
+   * @return  WooRevo_pro_AttInfo A single instance of this class.
+   */
+  public static function get_instance()
+  {
+    if (null == self::$instance) {
+      self::$instance = new self;
+    }
+    return self::$instance;
+  }
+
+  function __construct()
+  {
+    add_action('init', array(
+      $this,
+      'init_action_callbacks'
+    ));
+    add_action('wp_enqueue_scripts', array(
+      $this,
+      'frontend_scripts'
+    ));
+    add_action('admin_menu', array(
+      $this,
+      'clockmd_menu_pages'
+    ));
+    add_shortcode('clockmd_show_hospitals', array(
+      $this,
+      'clockmd_show_hospitals_cb'
+    ));
+    add_shortcode('clockmd_show_hospitals_with_map', array(
+      $this,
+      'clockmd_show_hospitals_with_map_cb'
+    ));
+  }
+
+  function get_with_authorization($endpoint)
+  {
+    $ch = curl_init($this->apiurl . "/" . $endpoint);
+    curl_setopt($ch, CURLOPT_HTTPHEADER, array(
+      "authtoken: " . $this->authtoken,
+      "Content-Type: application/json"
+    ));
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_HEADER, true);
+    $response = curl_exec($ch);
+
+    $header_size = curl_getinfo($ch, CURLINFO_HEADER_SIZE);
+    $header = substr($response, 0, $header_size);
+    $body = substr($response, $header_size);
+    return json_decode($body, true);
+  }
+
+  function post_with_authorization($endpoint, $data)
+  {
+    $ch = curl_init($this->apiurl . "/" . $endpoint);
+    curl_setopt($ch, CURLOPT_HTTPHEADER, array(
+      "authtoken: " . $this->authtoken,
+      "Content-Type: application/json"
+    ));
+    curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_HEADER, true);
+    $response = curl_exec($ch);
+
+    $header_size = curl_getinfo($ch, CURLINFO_HEADER_SIZE);
+    $header = substr($response, 0, $header_size);
+    $body = substr($response, $header_size);
+    return json_decode($body, true);
+  }
+
+  function frontend_scripts()
+  {
+
+    wp_register_script("popper.min.js", plugin_dir_url(__FILE__) . '/popper.min.js', array(
+      'jquery'
+    ), time(), false);
+
+    wp_register_script("bootstrap.min.js", plugin_dir_url(__FILE__) . '/bootstrap.min.js', array(
+      'jquery',
+      'popper.min.js'
+    ), time(), false);
+
+    wp_register_script("input.mask.js", plugin_dir_url(__FILE__) . '/input.mask.js', array(
+      'jquery'
+    ), time(), false);
+
+    wp_register_script("clockmd-script-js", plugin_dir_url(__FILE__) . '/script.js', array(
+      'jquery',
+      'input.mask.js',
+      'bootstrap.min.js'
+    ), time(), false);
+
+    wp_enqueue_style('bootstrap4', plugin_dir_url(__FILE__) . '/bootstrap.min.css', array(), time(), false);
+
+    wp_enqueue_style('scheduling', plugin_dir_url(__FILE__) . '/scheduling.css', array(), time(), false);
+
+    wp_enqueue_script("bootstrap.min.js");
+
+    wp_enqueue_script("clockmd-script-js");
+  }
+
+  public function getHopitalNameForGf($hospitalName)
+  {
+    switch ($hospitalName) {
+      case 'HasletAvondaleUS287':
+        return 'HasletUS287';
+        break;
+      case 'Haslet Avondale 287':
+        return 'HasletUS287';
+        break;
+      case 'McKinney':
+        return 'Mckinney';
+        break;
+      case 'McKinney Custer':
+        return 'Mckinney';
+        break;
+      case 'Wichita Falls':
+        return 'WFalls';
+        break;
+      default:
+        return $hospitalName;
+        break;
+    }
+  }
+
+  public function populateDb($storename, $latitude, $longitude, $full_address, $phone_number, $externalUrl)
+  {
+    global $table_prefix, $wpdb;
+    // $time_taken = time();
+    $tblname = $table_prefix . 'ssf_wp_stores';
+
+    $sql = "SELECT * FROM $tblname WHERE ssf_wp_store='$storename'";
+    $row = $wpdb->get_row($sql, ARRAY_A);
+
+    $city = "";
+    $state = "";
+    $county = "";
+    $zip = "";
+    if (!empty($full_address)) {
+      $addressArray = explode(",", $full_address);
+      $stateAndZip = explode(" ", $addressArray[3]);
+
+      // Setting the params
+      $street = $addressArray[0] . ", " . $addressArray[1];
+      $city = $addressArray[2];
+      $state = $stateAndZip[1];
+      $county = end($addressArray);
+      $zip = $stateAndZip[2];
     }
 
-	function __construct() {
-		add_action( 'init', array($this, 'init_action_callbacks') );
-		add_action( 'wp_enqueue_scripts', array($this,'frontend_scripts') );
-		add_action( 'admin_menu', array($this,'clockmd_menu_pages') );
-		add_shortcode( 'clockmd_show_hospitals', array($this, 'clockmd_show_hospitals_cb') );
-		add_shortcode( 'clockmd_show_hospitals_with_map', array($this, 'clockmd_show_hospitals_with_map_cb') );
-	}
+    if (is_array($row) && count($row) > 0) {
+      // We don't need update now
+      $sql = "UPDATE $tblname SET ssf_wp_store='$storename', ssf_wp_address='$street', ssf_wp_city='$city', ssf_wp_state='$state', ssf_wp_country='$county', ssf_wp_zip='$zip', ssf_wp_latitude='$latitude', ssf_wp_longitude='$longitude', ssf_wp_phone='$phone_number', ssf_wp_ext_url='$externalUrl', ssf_wp_is_published='1', ssf_wp_tags='Clinic&#44;' WHERE ssf_wp_store='$storename'";
+      return $wpdb->query($sql);
+    } else {
+      /**
+       * Generating the query to insert game with all its levels
+       *
+       */
+      $sql = "INSERT INTO $tblname (ssf_wp_store, ssf_wp_address, ssf_wp_city, ssf_wp_state, ssf_wp_country, ssf_wp_zip, ssf_wp_latitude, ssf_wp_longitude, ssf_wp_phone, ssf_wp_ext_url, ssf_wp_is_published, ssf_wp_tags) VALUES ('$storename','$street','$city','$state','$county','$zip','$latitude','$longitude', '$phone_number', '$externalUrl', '1', 'Clinic&#44;')";
+      return $wpdb->query($sql);
+    }
+  }
 
-	function get_with_authorization( $endpoint ) {
-	    $ch = curl_init( $this->apiurl."/".$endpoint );
-	    curl_setopt($ch, CURLOPT_HTTPHEADER, array(
-	        "authtoken: ".$this->authtoken,
-	        "Content-Type: application/json"
-	    ));
-	    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-	    curl_setopt($ch, CURLOPT_HEADER, true);
-	    $response = curl_exec($ch);
+  public function getStoreInfoFromDb( $hospitalId ) {
+    global $table_prefix, $wpdb;
+    $tblname = $table_prefix . 'ssf_wp_stores';
 
-	    $header_size = curl_getinfo($ch, CURLINFO_HEADER_SIZE);
-	    $header      = substr($response, 0, $header_size);
-	    $body        = substr($response, $header_size);
-	    return json_decode($body, true);
-	}
+    $sql = "SELECT * FROM $tblname WHERE ssf_wp_ext_url like '%?hospital=$hospitalId%' ";
+    return $wpdb->get_row($sql, ARRAY_A);
+  }
 
-	function post_with_authorization( $endpoint, $data ) {
-	    $ch = curl_init( $this->apiurl."/".$endpoint );
-	    curl_setopt($ch, CURLOPT_HTTPHEADER, array(
-	        "authtoken: ".$this->authtoken,
-	        "Content-Type: application/json"
-	    ));
-    	curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));	    
-	    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-	    curl_setopt($ch, CURLOPT_HEADER, true);
-	    $response = curl_exec($ch);
+  function init_action_callbacks()
+  {
+    if (!empty($_GET['page']) && !empty($_GET['importclockmd']) && $_GET['importclockmd'] == 1 && $_GET['page'] == "clockmd__settings") {
+      $hospitals = $this->get_with_authorization('/hospitals?details=true');
+      if (is_array($hospitals) && count($hospitals) > 0) {
+        $dbResponse = array();
+        foreach ($hospitals as $i => $hospital) {
+          $extUrl = site_url() . "/online-appointment-form?hospital=" . $hospital['id'];
+          $dbResponse[] = $this->populateDb($hospital['name'], $hospital['latitude'], $hospital['longitude'], $hospital['full_address'], $hospital['phone_number'], $extUrl);
+        }
+      }
+    }
 
-	    $header_size = curl_getinfo($ch, CURLINFO_HEADER_SIZE);
-	    $header      = substr($response, 0, $header_size);
-	    $body        = substr($response, $header_size);
-	    return json_decode($body, true);
-	}
+    if (!empty($_POST) && !empty($_POST['appointment']) && is_array($_POST['appointment']) && count($_POST['appointment']) > 0) {
 
-	function frontend_scripts() {
+      // Getting the formdata
+      $createAppointmentData = $_POST['appointment'];
 
-		wp_register_script( "input.mask.js",
-			plugin_dir_url( __FILE__ ) . '/input.mask.js',
-			array( 'jquery' ), 
-			time(), 
-			false 
-		);
+      $cmdhospitalName = explode(" - ", $createAppointmentData['hospital_name']);
+      $location = $this->getHopitalNameForGf(trim($cmdhospitalName[1]));
 
-		wp_register_script( "clockmd-script-js",
-			plugin_dir_url( __FILE__ ) . '/script.js',
-			array( 'jquery', 'input.mask.js' ), 
-			time(), 
-			false 
-		);		
+      // Converting the date format into the api desired format
+      $createAppointmentData['dob'] = date("m/d/Y", strtotime($createAppointmentData['dob']));
 
-		wp_enqueue_style('bootstrap4', 
-			plugin_dir_url( __FILE__ ) . '/bootstrap.min.css',
-			array(), 
-			time(), 
-			false 
-		);
+      // Calling the create appointment API
+      $createAppointmentRes = $this->post_with_authorization('/appointments/create', $createAppointmentData);
 
-		/**********************************************************
-		* Scripts for Hospital List with Google Map
-		*********************************************************
-		wp_enqueue_script( 'mustache', 
-			'//s3-us-west-1.amazonaws.com/clockwisepublic/mustache.js', 
-			array( 'jquery' ), 
-			'', 
-			false 
-		);
+      if (is_array($createAppointmentRes) && count($createAppointmentRes) > 0) {
+        if (isset($createAppointmentRes['error'])) {
+          $errorMsgToSend = explode(":", $createAppointmentRes['error'])[1];
+          wp_redirect("?action=appointment_error&errmsg=" . $errorMsgToSend . "&hospital=" . $createAppointmentData['hospital_id']);
+        } else {
+          date_default_timezone_set('America/Chicago');
+          /*
+          // Appointment confirmed for this clinic name at this date at this time
+          $msg = "Appointment confirmed for ".$createAppointmentData['hospital_name'];
+          $msg .= " at ".date( "m/d/Y H:i:s A", strtotime($createAppointmentData['apt_time']) );
+          // $msg .= " and your confirmation code is ".$createAppointmentRes['confirmation_code'];
+          // $msg .= " and appointment queue id is ".$createAppointmentRes['appointment_queue_id'];*/
+          $queryString = array(
+            'gtm' => 'appointment',
+            'checkinid' => 'clockwise',
+            'Location' => $location,
+            'notifemail' => $createAppointmentData['email'],
+            'visitdate' => date('m-d-Y', strtotime($createAppointmentData['apt_time'])),
+            'sched' => date('h:i', strtotime($createAppointmentData['apt_time'])),
+            'patphne' => $createAppointmentData['phone_number'],
+            'fname' => $createAppointmentData['first_name'],
+            'lname' => $createAppointmentData['last_name'],
+            'patdob' => $createAppointmentData['dob'],
+            // 'reason_id' => $createAppointmentData['reason_id'],
+            // 'vt' => $createAppointmentRes['reason_description']
+          );
+          if ($createAppointmentData['is_new_patient'] !== "true") {
+            $queryString['patstatus'] = 'Existing Patient';
+          } else {
+            $queryString['patstatus'] = 'New Patient';
+          }
+          wp_redirect("https://forms.communitymedcare.com/?" . http_build_query($queryString));
+        }
+        exit;
+      }
+    }
+  }
 
-		wp_enqueue_script( 'pubnub', 
-			'//cdn.pubnub.com/pubnub.min.js', 
-			array( 'jquery' ), 
-			'', 
-			false 
-		);
+  function clockmd_show_hospitals_cb($atts)
+  {
+    $atts = shortcode_atts(array(
+      'foo' => 'no foo'
+    ), $atts);
+    return $this->get_hospitals();
+  }
 
-		wp_enqueue_script( 'googlemap', 
-			'//maps.googleapis.com/maps/api/js', 
-			array( 'jquery' ), 
-			'', 
-			false 
-		);
+  function get_hospitals()
+  {
+    $str = "<div class='container appointments-container'>";
+    $str .= "<div class='row'>";
 
-		wp_enqueue_script( 'geoposition', 
-			'//s3-us-west-1.amazonaws.com/clockwisepublic/geoposition.js', 
-			array( 'jquery' ), 
-			'', 
-			false 
-		);
+    if (!empty($_GET['hospital'])) {
+      $hospitalId = $_GET['hospital'];
+      $reasonId = 0;
+      if (!empty($_GET['reasonId'])) {
+        $reasonId = $_GET['reasonId'];
+      }
 
-		wp_enqueue_script( 'infobox', 
-			'//s3-us-west-1.amazonaws.com/clockwisepublic/infobox.js', 
-			array( 'jquery' ), 
-			'', 
-			false 
-		);
+      // If appointmentcreated and msg is set then show notification bar
+      if (!empty($_GET['action']) && !empty($_GET['msg']) && $_GET['action'] == "appointment_created") {
+        $str .= '<div class="col-md-12"><div class="alert alert-success" role="alert">' . $_GET['msg'] . '</div></div>';
+        $str .= '<div class="col-md-12"><a class="btn btn-primary" href="https://forms.communitymedcare.com" target="_blank">Fill Out your Registration Forms</a></div>';
+      }
+      else {
+        // If appointmenterror and msg is set then show notification bar
+        if (!empty($_GET['errmsg'])) {
+          $str .= '<div class="col-md-12"><div class="alert alert-danger" role="alert">' . $_GET['errmsg'] . '</div></div>';
+        }
 
-		wp_enqueue_script( 'groups', 
-			'//www.clockwisemd.com/groups/'.GROUP_ID.'.js', 
-			array( 'jquery' ), 
-			'', 
-			true 
-		);
+        // #1. Getting the Hospital Informations
+        $hospital = $this->get_with_authorization('/hospitals/' . $hospitalId);
 
-		wp_enqueue_style( 'clockwise', 
-			'//s3-us-west-1.amazonaws.com/clockwisepublic/clockwise_map.css', 
-			array( 'jquery' ), 
-			'', 
-			false 
-		);
+        // #2. Getting the reasons Informations
+        $reasonDescription = "";
+        $reasons = $this->get_with_authorization('/reasons?hospital_id=' . $hospitalId);
 
-		/**********************************************************
-		* /END: Scripts for Hospital List with Google Map
-		**********************************************************/		
-		wp_enqueue_script( "clockmd-script-js" );
-	}	
+        if (!isset($reasons['error'])) {
+          // #3. Generating the reasons dropdown
+          $select = '<select required onchange="changeReason(this)" class="form-control form-control-lg reason_description" name="appointment[reason_id]">';
+          if (!empty($reasons['reasons']) && is_array($reasons['reasons'])) {
+            foreach ($reasons['reasons'] as $i => $reason) {
+              if ($i == 0) {
+                $reasonDescription = $reason['description'];
+                $select .= '<option selected value="' . $reason['id'] . '">' . $reason['description'] . '</option>';
+              } else if ($reasonId == $reason['id']) {
+                $reasonDescription = $reason['description'];
+                $select .= '<option selected value="' . $reason['id'] . '">' . $reason['description'] . '</option>';
+              } else {
+                $select .= '<option value="' . $reason['id'] . '">' . $reason['description'] . '</option>';
+              }
+            }
+          }
+          $select .= '</select>';
+          $select .= '<input type="hidden" name="appointment[hospital_id]" value="' . $hospitalId . '" />';
+          $select .= '<input type="hidden" name="appointment[hospital_name]" value="' . $hospital['name'] . '" />';
 
-	public function getHopitalNameForGf( $hospitalName ) {
-		switch ($hospitalName) {
-			case 'HasletAvondaleUS287':
-				return 'HasletUS287';
-			break;
-			case 'McKinney':
-				return 'Mckinney';
-			break;
-			case 'Wichita Falls':
-				return 'WFalls';
-			break;
-			default:
-				return $hospitalName;
-			break;
-		}
-	}
+          // #4. Getting the timeslots html
+          $timeSlots = $this->get_hospital_available_times($hospitalId, $reasonDescription);
 
-	public function populateDb($storename, $latitude, $longitude, $full_address, $phone_number, $externalUrl) {
-		global $table_prefix, $wpdb;
-		// $time_taken = time();
-		$tblname = $table_prefix . 'ssf_wp_stores';
-		
-		$sql = "SELECT * FROM $tblname WHERE ssf_wp_store='$storename'";
-		$row = $wpdb->get_row($sql, ARRAY_A);
+          $str .= $this->getAppointmentForm($select, $timeSlots);
+          $str .= "<div class='col-12 col-lg-4 col-xl-6'>
+              <div class='appointments-form-logo'>
+                <img src='" . $this->clockwiselogo . "'>
+              </div>
+              <div class='appointments-form-header'>
+                <h4>" . $hospital['name'] . "</h4>
+                <div class='appointments-address'>
+                  <a target='_blank' href='//maps.google.com/?q=" . urlencode($hospital['full_address']) . "'><span data-v-4266784e='' role='img' aria-label='MapMarker icon' class='mdi mdi-map-marker'><svg data-v-4266784e='' fill='currentColor' width='24' height='24' viewBox='0 0 24 24' xmlns='http://www.w3.org/2000/svg'><!----> <path data-v-4266784e='' d='M12,11.5A2.5,2.5 0 0,1 9.5,9A2.5,2.5 0 0,1 12,6.5A2.5,2.5 0 0,1 14.5,9A2.5,2.5 0 0,1 12,11.5M12,2A7,7 0 0,0 5,9C5,14.25 12,22 12,22C12,22 19,14.25 19,9A7,7 0 0,0 12,2Z'></path></svg></span>" . $hospital['full_address'] . "</a>
+                </div>
+                <div class='appointments-tel'>
+                  <a href='tel:" . $hospital['phone_number'] . "' >" . $hospital['phone_number'] . "</a>
+                </div>
+              </div>
+              <div class='appointments-form-info'>
+                <p>Today's Business Hours: ".$hospital['todays_business_hours']."</p>
+                <p>Please complete the following information to hold a place in line! <br>
+                Note that all times are estimates only.</p>
+              </div>";
 
-		$city = "";
-		$state = "";
-		$county = "";
-		$zip = "";		
-		if (!empty($full_address)) {
-			$addressArray = explode(",", $full_address);
-			$stateAndZip = explode(" ", $addressArray[3]);
+            // Getting the hospital id from db
+            $hospitalInfoFromDb = $this->getStoreInfoFromDb( $hospitalId );
+            if ( $hospitalInfoFromDb['ssf_wp_id'] ) {
+              $imageUrl = $this->getSsfUploadDir( $hospitalInfoFromDb['ssf_wp_id'] );
+              if ( $imageUrl ) {
+                $str .= "<img class='clinic-image' src='".$imageUrl."'/>";
+              }
+            }
 
-			// Setting the params
-			$street = $addressArray[0];
-			$city 	= $addressArray[2];
-			$state 	= $stateAndZip[1];
-			$county = end($addressArray);
-			$zip 	= $stateAndZip[2];
-		}		
+          $str .= "</div>";
+        } else {
+          $str .= '<div class="col-md-12"><center>There are no times available for online scheduling right now. During normal office hours, just come in to the facility we will see you as a regular walk-in. Note: This message will be shown when there are no online visit times available (the clinic is full past their configured time for online patients OR the clinic is closed).</center></div>';
+        }
+      }
+    } else {
+      $str .= "<div class='col-md-12'>No Hospital Id</div>";
+    }
+    $str .= "</div>";
+    $str .= "</div>";
+    return $str;
+  }
 
-		if ( is_array($row) && count($row) > 0 ) {
-			// We don't need update now
-	    	$sql = "UPDATE $tblname SET ssf_wp_store='$storename', ssf_wp_address='$street', ssf_wp_city='$city', ssf_wp_state='$state', ssf_wp_country='$county', ssf_wp_zip='$zip', ssf_wp_latitude='$latitude', ssf_wp_longitude='$longitude', ssf_wp_phone='$phone_number', ssf_wp_ext_url='$externalUrl', ssf_wp_is_published='1', ssf_wp_tags='Clinic&#44;' WHERE ssf_wp_store='$storename'";
-	    	return $wpdb->query($sql);
-		} 
-		else {
-			/**
-			* Generating the query to insert game with all its levels
-			**/
-			$sql = "INSERT INTO $tblname (ssf_wp_store, ssf_wp_address, ssf_wp_city, ssf_wp_state, ssf_wp_country, ssf_wp_zip, ssf_wp_latitude, ssf_wp_longitude, ssf_wp_phone, ssf_wp_ext_url, ssf_wp_is_published, ssf_wp_tags) VALUES ('$storename','$street','$city','$state','$county','$zip','$latitude','$longitude', '$phone_number', '$externalUrl', '1', 'Clinic&#44;')";
-			return $wpdb->query($sql);
-		}
+  function getAppointmentForm($dropDown, $timeslots) {
+    date_default_timezone_set('America/Chicago');
+    $now    = new DateTime();
+    $begin  = new DateTime('17:00');
+    $end    = new DateTime('20:30');
+    $tmpString = "";
 
-	}
+    if ( !empty($_GET['hospital']) ) {
+      $hospitalId = $_GET['hospital'];
+      $hospitalUrl = site_url() . "/online-appointment-form?hospital=2768";
+      $lantanaClinicUrl = site_url() . "/online-appointment-form?hospital=5558";
 
-	function init_action_callbacks() {
-		if ( !empty($_GET['page']) && !empty($_GET['importclockmd']) && $_GET['importclockmd'] == 1 && $_GET['page'] == "clockmd__settings" ) {
-			$hospitals = $this->get_with_authorization( '/hospitals?details=true' );
-			if (is_array($hospitals) && count($hospitals) > 0) {				
-				$dbResponse = array();
-				foreach ($hospitals as $i => $hospital) {
-					$extUrl = site_url()."/online-appointment-form?hospital=".$hospital['id'];
-					$dbResponse[] = $this->populateDb($hospital['name'], $hospital['latitude'], $hospital['longitude'], $hospital['full_address'], $hospital['phone_number'], $extUrl);					
-				}				
-			}			
-		}
+      if ( $hospitalId == "2766" ) {
+        $tmpString .= "<h2><div class='col-md-12 col-lg-12 col-xl-12 alert alert-danger text-center nowalkins-noitce'>The Melissa Clinic is not accepting walk-ins (unscheduled visits) the rest of the day. Our McKinney Clinic is only a few miles away, and IS ACCEPTING scheduled visits and walkins. <a href='".$hospitalUrl."'>CLICK HERE FOR MCKINNEY CLINIC</a></div></h2>";
+      }
+      if ( $hospitalId == "3310" ) {
+        $tmpString .= "<h2><div class='col-md-12 col-lg-12 col-xl-12 alert alert-danger text-center nowalkins-noitce'>The Prosper Clinic is not accepting walk-ins (unscheduled visits) the rest of the day. Our McKinney Clinic is only a few miles away, and IS ACCEPTING scheduled visits and walkins. <a href='".$hospitalUrl."'>CLICK HERE FOR MCKINNEY CLINIC</a></div></h2>";
+      }
+      if ( $hospitalId == "2647" ) {
+        $tmpString .= "<h2><div class='col-md-12 col-lg-12 col-xl-12 alert alert-danger text-center nowalkins-noitce'>The Cross Roads Clinic is not accepting walk-ins (unscheduled visits) the rest of the day. Our Lantana Clinic is nearby and IS ACCEPTING scheduled visits and walk-ins. CLICK HERE FOR <a href='".$lantanaClinicUrl."'>LANTANA CLINIC</a></div></h2>";
+      }
+    }
 
-		if ( !empty($_POST) && !empty($_POST['appointment']) && is_array($_POST['appointment']) && count($_POST['appointment']) > 0 ) {
-			
-			// Getting the formdata
-			$createAppointmentData = $_POST['appointment'];
-			$cmdhospitalName = explode(" - ", $createAppointmentData['hospital_name']);
-			$location = $this->getHopitalNameForGf( trim($cmdhospitalName[1]) );			
+    if ( $now >= $begin && $now <= $end ) {
+      // Do Nothing
+    }
+    else {
+      // $tmpString = Date("H:i:s");
+      $tmpString = "";
+    }
 
-			// Converting the date format into the api desired format
-			$createAppointmentData['dob'] = date( "m/d/Y", strtotime($createAppointmentData['dob']) );
-			
-			// Calling the create appointment API
-			$createAppointmentRes = $this->post_with_authorization('/appointments/create', $createAppointmentData);
-			
-			if ( is_array($createAppointmentRes) && count($createAppointmentRes) > 0 ) {
-				if ( isset($createAppointmentRes['error']) ) {
-					wp_redirect( "?action=appointment_error&errmsg=".$createAppointmentRes['error']."&hospital=".$createAppointmentData['hospital_id'] );
-				}
-				else {
-					/*date_default_timezone_set('America/Chicago');
-					// Appointment confirmed for this clinic name at this date at this time
-					$msg = "Appointment confirmed for ".$createAppointmentData['hospital_name'];
-					$msg .= " at ".date( "m/d/Y H:i:s A", strtotime($createAppointmentData['apt_time']) );
-					// $msg .= " and your confirmation code is ".$createAppointmentRes['confirmation_code'];
-					// $msg .= " and appointment queue id is ".$createAppointmentRes['appointment_queue_id'];*/
-					$queryString = http_build_query(array(
-						'checkinid' => 'clockwise',
-						'Location' => $location,
-						'notifemail' => $createAppointmentData['email'],
-						'visitdate' => date( 'm-d-y', strtotime($createAppointmentData['apt_time']) ),
-						'sched' => date( 'h:i:s', strtotime($createAppointmentData['apt_time']) ),
-						'patstatus' => $createAppointmentData['is_new_patient'],
-						'patphone' => $createAppointmentData['phone_number'],
-						'fname' => $createAppointmentData['first_name'],
-						'lname' => $createAppointmentData['last_name'],
-						'patdob' => $createAppointmentData['dob']
-					));
-					wp_redirect( "https://forms.communitymedcare.com/?".$queryString );
-				}				
-				exit;
-			}
-		}
-	}
+    return $tmpString.'<div id="AppointmentFormWrapper" class="col-12 col-lg-8 col-xl-6">
+      <form class="appointments-form" action="" method="post" onsubmit="return getAppointmentData(this)">
+          <div class="form-group row">
+            <div class="col-md-12">
+            <label class="form-check-label">Select a visit reason</label>' . $dropDown . '</div>
+          </div>
+          <div class="form-group mobrow appointments-visit-time">
+            <label class="form-check-label">Patient Type</label>
+            <div class="btn-group d-flex js-patientTypeButtonWrapper" role="group" aria-label="Patient Type Button Wrapper">
+              <button onclick="updateOption(this)" value="true" type="button" class="btn btn-outline-primary w-100">New Patient</button>
+              <button onclick="updateOption(this)" value="false" type="button" class="btn btn-outline-primary w-100 select-option-btn">Existing Patient</button>
+            </div>
+          </div>
+          ' . $timeslots . '
+          <div class="form-group row">
+            <div class="resmbottom col-sm-12 col-md-6">
+              <label class="form-check-label">First Name</label>
+                <input required type="text" name="appointment[first_name]" class="form-control">
+            </div>
+            <div class="col-sm-12 col-md-6">
+              <label class="form-check-label">Last Name</label>
+                <input required type="text" name="appointment[last_name]" class="form-control">
+            </div>
+          </div>
+          <div class="form-group row">
+            <div class="resmbottom col-sm-12 col-md-6">
+              <label class="form-check-label">Date of Birth</label>
+                <input required type="date" name="appointment[dob]" class="form-control">
+            </div>
+            <div class="col-sm-12 col-md-6">
+              <label class="form-check-label">Patient Birth Sex</label>
+              <select required class="form-control form-control-lg" name="appointment[sex]">
+                <option value="">Select</option>
+                <option value="M">M</option>
+                <option value="F">F</option>
+              </select>
+            </div>
+             </div>
+          <div class="form-group row">
+            <div class="col-sm-12 col-md-12">
+              <label class="form-check-label">Cell Phone Number</label>
+                <input required type="tel" name="appointment[phone_number]" class="form-control">
+            </div>
+          </div>
+          <div class="form-group row">
+            <div class="col-sm-12 col-md-12">
+              <label class="form-check-label">Email</label>
+                <input required type="email" name="appointment[email]" class="form-control">
+            </div>
+          </div>
+          <div style="display:none" class="form-group row">
+            <div class="col-sm-12 col-md-12">
+              <label class="form-check-label">We\'ll send you a text message when it\'s time to show up.</label>
+            </div>
+            <div class="resmbottom col-sm-12 col-md-4">
+              <input min="1" type="number" name="appointment[reminder_minutes]" class="form-control">
+            </div>
+            <div class="col-sm-12 col-md-8"> minutes before your visit</div>
+          </div>
+          <div class="form-group row">
+            <div class="col-md-12">
+              <input type="hidden" name="appointment[can_send_alert_sms]" value="true">
+              <input type="hidden" name="appointment[is_new_patient]" />
+              <input type="hidden" name="appointment[days_from_today]" />
+              <input type="hidden" name="appointment[apt_time]" />
+              <button class="btn btn-primary" type="submit">Submit form</button>
+            </div>
+          </div>
+      </form>
+    </div>
+    <script>
+    jQuery(document).ready(function(){
+          jQuery("[name=\"appointment[days_from_today]\"]").trigger("click").change()
+      var phones = [{ "mask": "(###) ###-####"}];
+      jQuery(`input[name="appointment[phone_number]"]`).inputmask({
+      mask: phones,
+      greedy: false,
+      definitions: { "#": { validator: "[0-9]", cardinality: 1}},
+            autoUnmask: true
+      })
+    })
+    </script>';
+  }
 
-	function clockmd_show_hospitals_cb( $atts ) {
-		$atts = shortcode_atts( array(
-	        'foo' => 'no foo'
-	    ), $atts );
-	    return $this->get_hospitals();
-	}
+  function get_hospital_available_times($hospitalId, $reason_description)
+  {
+    /**
+     * Generating the API Path with Query string
+     *
+     */
+    $requestPath = '/hospitals/' . $hospitalId . '/available_times';
+    $requestPath .= '?';
+    $requestPath .= http_build_query(array(
+      'slot_type' => 'online',
+      'reason_description' => $reason_description
+    ));
 
-	/*function get_hospitals() {
-		$str = "<div class='container'>";
-		$str .= "<div class='row'>";
+    /**
+     * Calling the generated API
+     *
+     */
+    $timeSlots = $this->get_with_authorization($requestPath);
 
-		if ( !empty($_GET['action']) && $_GET['action'] == 'createappointment' && !empty($_GET['hospital']) ) {
-			$hospitalId = $_GET['hospital'];
-			$reasonId = 0;
-			if ( !empty($_GET['reasonId']) ) {
-				$reasonId = $_GET['reasonId'];
-			}
+    /**
+     * Creating the variables
+     *
+     */
+    $timeSlotsHtml = "";
+    $todayDate = date("m/d/Y");
+    $nextDayTimeStamp = strtotime("+1 day");
+    $nextDate = date("m/d/Y", $nextDayTimeStamp);
+    $todayTimeStamp = strtotime(date("m/d/Y"));
 
-			// #1. Getting the Hospital Informations
-			$hospital = $this->get_with_authorization( '/hospitals/'.$hospitalId );			
-			
-			// #2. Getting the reasons Informations
-			$reasonDescription = "";
-			$reasons = $this->get_with_authorization( '/reasons?hospital_id='.$hospitalId );
-			
-			if ( !isset($reasons['error']) ) {
-				// #3. Generating the reasons dropdown
-				$select = '<select required onchange="changeReason(this)" class="form-control form-control-lg reason_description" name="appointment[reason_id]">';
-				if ( !empty($reasons['reasons']) && is_array($reasons['reasons']) ) {
-					foreach ($reasons['reasons'] as $i => $reason) {
-						if ($i == 0) {
-							$reasonDescription = $reason['description'];
-							$select .= '<option selected value="'.$reason['id'].'">'.$reason['description'].'</option>';
-						}
-						else if ( $reasonId == $reason['id'] ) {
-							$reasonDescription = $reason['description'];
-							$select .= '<option selected value="'.$reason['id'].'">'.$reason['description'].'</option>';
-						} 
-						else {
-							$select .= '<option value="'.$reason['id'].'">'.$reason['description'].'</option>';
-						}
-					}
-				}
-				$select .= '</select>';
-				$select .= '<input type="hidden" name="appointment[hospital_id]" value="'.$hospitalId.'" />';
-				$select .= '<input type="hidden" name="appointment[hospital_name]" value="'.$hospital['name'].'" />';
+    /**
+     * Generating all Dropdowns with target Id so that it can be hide/show using jquery
+     *
+     */
+    $todayTimeOptions = "";
+    $todayDropdownTimeOptions = "";
+    $todayTimeCounter = 0;
 
-				// #4. Getting the timeslots html			
-				$timeSlots = $this->get_hospital_available_times( $hospitalId, $reasonDescription );
+    $tomorrowTimeOptions = "";
+    $tomorrowDropdownTimeOptions = "";
+    $tomorrowTimeCounter = 0;
 
-				$str .= "<div class='col-md-12'>
-						<img src='".$this->clockwiselogo."'>
-						<center>
-							<h4>".$hospital['name']."</h4>
-							<div>".$hospital['full_address']."</div>
-							<div>".$hospital['phone_number']."</div>
-							<p><div>Please Note: you can also try one of our other nearby clinics</div></p>
-							<p><div>Please complete the information below to hold a place in line!</div>
-							<div>Note that all times are estimates only.</div>
-							<div>But first, please make sure you don't <a href='https://www.911.gov/needtocallortext911.html' target='_blank'>need to call 911</a></div></p>
-						</center>
-					</div>";
+    $isTodayTimeAvailable = "(No Times Available)";
 
-				// If appointmentcreated and msg is set then show notification bar
-				if ( !empty($_GET['msg']) ) {
-					$str .= '<div class="col-md-12"><div class="alert alert-success" role="alert">'.$_GET['msg'].'</div></div>';
-				}
+    foreach ($timeSlots as $i => $times) {
+      foreach ($times as $j => $t) {
+        $date = strtotime($t['date']);
+        if ( is_array($t['times']) && count($t['times']) > 0 ) {
+          foreach ($t['times'] as $k => $ts) {
+            if ($todayTimeStamp == $date) {
+              $isTodayTimeAvailable = "";
+              if ( $todayTimeCounter == 0 ) {
+                $todayTimeOptions .= '<button onclick="onTimeSelect(this)" type="button" data-target-date="' . $todayTimeStamp . '" value="' . $ts['time'] . '" class="btn btn-outline-primary w-100 select-option-btn">' . $ts['display_time'] . '</button>';
+              }
+              else if ( $todayTimeCounter > 0 && $todayTimeCounter < 4 ) {
+                $todayTimeOptions .= '<button onclick="onTimeSelect(this)" type="button" data-target-date="' . $todayTimeStamp . '" value="' . $ts['time'] . '" class="btn btn-outline-primary w-100">' . $ts['display_time'] . '</button>';
+              }
+              else {
+                $todayDropdownTimeOptions .= '<button onclick="onTimeSelect(this)" href="#" data-target-date="' . $todayTimeStamp . '" value="' . $ts['time'] . '" class="dropdown-item">' . $ts['display_time'] . '</button>';
+              }
+              $todayTimeCounter++;
+            }
+            else {
+              if ( $tomorrowTimeCounter == 0 ) {
+                $tomorrowTimeOptions .= '<button onclick="onTimeSelect(this)" type="button" data-target-date="' . $todayTimeStamp . '" value="' . $ts['time'] . '" class="btn btn-outline-primary w-100 select-option-btn">' . $ts['display_time'] . '</button>';
+              }
+              else if ( $tomorrowTimeCounter > 0 && $tomorrowTimeCounter < 4 ) {
+                $tomorrowTimeOptions .= '<button onclick="onTimeSelect(this)" type="button" data-target-date="' . $todayTimeStamp . '" value="' . $ts['time'] . '" class="btn btn-outline-primary w-100">' . $ts['display_time'] . '</button>';
+              }
+              else {
+                $tomorrowDropdownTimeOptions .= '<button onclick="onTimeSelect(this)" href="#" data-target-date="' . $todayTimeStamp . '" value="' . $ts['time'] . '" class="dropdown-item">' . $ts['display_time'] . '</button>';
+              }
+              $tomorrowTimeCounter++;
+            }
+          }
+        }
+        else {
+          if ( !empty ($_GET['hospital']) ) {
+            $hospitalId = $_GET['hospital'];
+            $McKinneyClinicHospitalUrl = site_url() . "/online-appointment-form?hospital=2768";
+            $PrincetonClinicHospitalUrl = site_url() . "/online-appointment-form?hospital=2695";
+            $CrossRoadsClinicHospitalUrl = site_url() . "/online-appointment-form?hospital=2647";
+            if ( $todayTimeStamp == $date ) {
+              if ( $hospitalId == "2766" ) {
+                $todayTimeOptions = "<div class='col-md-12 col-lg-12 col-xl-12 alert alert-danger text-center nowalkins-noitce'>This clinic has no more spots available today. Check our <a href='".$McKinneyClinicHospitalUrl."'>McKinney Clinic</a> or <a href='".$PrincetonClinicHospitalUrl."'>Princeton Clinic</a> for availability. If you are injured, we can still see you as a walk-in at this clinic.</div>";
+              }
+              elseif ( $hospitalId == "3310" ) {
+                $todayTimeOptions = "<div class='col-md-12 col-lg-12 col-xl-12 alert alert-danger text-center nowalkins-noitce'>This clinic has no more spots available today. Check our <a href='".$McKinneyClinicHospitalUrl."'>McKinney Clinic</a> or <a href='".$CrossRoadsClinicHospitalUrl."'>Cross Roads Clinic</a> for availability. If you are injured, we can still see you as a walk-in at this clinic.</div>";
+              }
+              else {
+                $todayTimeOptions = "<div class='col-md-12 col-lg-12 col-xl-12 alert alert-danger text-center nowalkins-noitce'>This clinic has no more spots available today.</div>";
+              }
+            }
+            else {
+              if ( $hospitalId == "2766" ) {
+                $tomorrowTimeOptions = "<div class='col-md-12 col-lg-12 col-xl-12 alert alert-danger text-center nowalkins-noitce'>This clinic has no more spots available. Check our <a href='".$McKinneyClinicHospitalUrl."'>McKinney Clinic</a> or <a href='".$PrincetonClinicHospitalUrl."'>Princeton Clinic</a> for availability. If you are injured, we can still see you as a walk-in at this clinic.</div>";
+              }
+              elseif ( $hospitalId == "3310" ) {
+                $tomorrowTimeOptions = "<div class='col-md-12 col-lg-12 col-xl-12 alert alert-danger text-center nowalkins-noitce'>This clinic has no more spots available. Check our <a href='".$McKinneyClinicHospitalUrl."'>McKinney Clinic</a> or <a href='".$CrossRoadsClinicHospitalUrl."'>Cross Roads Clinic</a> for availability. If you are injured, we can still see you as a walk-in at this clinic.</div>";
+              }
+              else {
+                $tomorrowTimeOptions = "<div class='col-md-12 col-lg-12 col-xl-12 alert alert-danger text-center nowalkins-noitce'>This clinic has no more spots available.</div>";
+              }
+            }
+          }
+        }
+      }
+    }
 
-				// If appointmenterror and msg is set then show notification bar
-				if ( !empty($_GET['errmsg']) ) {
-					$str .= '<div class="col-md-12"><div class="alert alert-danger" role="alert">'.$_GET['errmsg'].'</div></div>';
-				}
+    $timeSlotsHtml .= '<div class="form-group mobrow appointments-visit-time">
+      <label class="form-check-label">Visit Time</label>
+      <div class="btn-group d-flex js-daySelectorButtonWrapper" role="group" aria-label="Day Selector Button Wrapper">
+        <button onclick="updateOption(this)" data-targetOptionGroup="' . $todayTimeStamp . '" value="0" type="button" class="btn select-option-btn btn-outline-primary w-100">' . $todayDate . '</button>
+        <button onclick="updateOption(this)" data-targetOptionGroup="' . $nextDayTimeStamp . '" value="1" type="button" class="btn btn-outline-primary w-100">' . $nextDate . '</button>
+      </div>
+    </div>';
+    $timeSlotsHtml .= '<div data-optionGroup="'.$todayTimeStamp.'" class="btn-group form-group d-flex mob-appointments-visit-time appointments-visit-time js-todayTimeSelectorButtonWrapper" role="group" aria-label="Button group with nested dropdown">'.$todayTimeOptions;
 
-				$str .= $this->getAppointmentForm( $select, $timeSlots );	
-			}
-			else {
-				$str .= '<div class="col-md-12"><center>There are no times available for online scheduling right now. During normal office hours, just come in to the facility we will see you as a regular walk in.Note: This message will be shown when there are no online visit times available (the clinic is full past their configured time for online patients OR the clinic is closed).</center></div>';
-			}			
-		}
-		else {
-			$hospitals = $this->get_with_authorization( '/hospitals?details=true' );
-			foreach ($hospitals as $i => $hospital) {
-				$str .= "<div class='col-md-4'>
-					<div class='card'>
-						<img src='".$this->clockwiselogo."'>
-						<div class='card-body'>
-							<h5 class='card-title'><a href='?action=createappointment&hospital=".$hospital['id']."'>".$hospital['name']."</a></h5>
-							<p class='card-text align-center'>".$hospital['full_address']."</p>
-							<p class='card-text align-center'>".$hospital['phone_number']."</p>
-							<a href='?action=createappointment&hospital=".$hospital['id']."' class='btn btn-primary'>Checkin Online</a>
-						</div>
-					</div>
-				</div>";
-			}
-		}
+    if ( !empty($todayDropdownTimeOptions) ) {
+      $timeSlotsHtml .= '<div class="btn-group js-otherTimeslotsDropdown" role="group">
+        <button type="button" class="btn btn-outline-primary w-100 dropdown-toggle" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">More</button>
+        <div class="dropdown-menu dropdownMenuMaxheight" aria-labelledby="more-time">
+          '.$todayDropdownTimeOptions.'
+        </div>
+      </div>';
+    }
+    $timeSlotsHtml .= '</div>';
+    $timeSlotsHtml .= '<div data-optionGroup="'.$nextDayTimeStamp.'" class="displaynone btn-group form-group d-flex mob-appointments-visit-time appointments-visit-time js-tomorrowTimeSelectorButtonWrapper" role="group" aria-label="Button group with nested dropdown">'.$tomorrowTimeOptions;
 
-		$str .= "</div>";
-		$str .= "</div>";
+    if ( !empty($tomorrowDropdownTimeOptions) ) {
+      $timeSlotsHtml .= '<div class="btn-group js-otherTimeslotsDropdown" role="group">
+        <button type="button" class="btn btn-outline-primary w-100 dropdown-toggle" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">More</button>
+        <div class="dropdown-menu dropdownMenuMaxheight" aria-labelledby="more-time">
+          '.$tomorrowDropdownTimeOptions.'
+        </div>
+      </div>';
+    }
+    $timeSlotsHtml .= '</div>';
 
-		return $str;
-	}*/
+    return $timeSlotsHtml;
+  }
 
-	function get_hospitals() {
-		$str = "<div class='container'>";
-		$str .= "<div class='row'>";
+  function clockmd_show_hospitals_with_map_cb()
+  {
+    return 'This shortcode has been disabled';
+  }
 
-		if ( !empty($_GET['hospital']) ) {
-			$hospitalId = $_GET['hospital'];
-			$reasonId = 0;
-			if ( !empty($_GET['reasonId']) ) {
-				$reasonId = $_GET['reasonId'];
-			}
+  function clockmd_menu_pages()
+  {
+    $menu_name = 'ClockMD Settings';
+    $menu_slug = 'clockmd__settings';
+    $menu_main = 'ClockMD Settings';
 
-			// If appointmentcreated and msg is set then show notification bar
-			if ( !empty($_GET['action']) && !empty($_GET['msg']) && $_GET['action'] == "appointment_created" ) {
-				$str .= '<div class="col-md-12"><div class="alert alert-success" role="alert">'.$_GET['msg'].'</div></div>';
-				$str .= '<div class="col-md-12"><a class="btn btn-primary" href=" https://forms.communitymedcare.com" target="_blank">Fill Out your Registration Forms</a></div>';
-			}
-			else {
-				// #1. Getting the Hospital Informations
-				$hospital = $this->get_with_authorization( '/hospitals/'.$hospitalId );			
-				
-				// #2. Getting the reasons Informations
-				$reasonDescription = "";
-				$reasons = $this->get_with_authorization( '/reasons?hospital_id='.$hospitalId );
-				
-				if ( !isset($reasons['error']) ) {
-					// #3. Generating the reasons dropdown
-					$select = '<select required onchange="changeReason(this)" class="form-control form-control-lg reason_description" name="appointment[reason_id]">';
-					if ( !empty($reasons['reasons']) && is_array($reasons['reasons']) ) {
-						foreach ($reasons['reasons'] as $i => $reason) {
-							if ($i == 0) {
-								$reasonDescription = $reason['description'];
-								$select .= '<option selected value="'.$reason['id'].'">'.$reason['description'].'</option>';
-							}
-							else if ( $reasonId == $reason['id'] ) {
-								$reasonDescription = $reason['description'];
-								$select .= '<option selected value="'.$reason['id'].'">'.$reason['description'].'</option>';
-							} 
-							else {
-								$select .= '<option value="'.$reason['id'].'">'.$reason['description'].'</option>';
-							}
-						}
-					}
-					$select .= '</select>';
-					$select .= '<input type="hidden" name="appointment[hospital_id]" value="'.$hospitalId.'" />';
-					$select .= '<input type="hidden" name="appointment[hospital_name]" value="'.$hospital['name'].'" />';
+    add_menu_page($menu_name, $menu_main, 'manage_options', $menu_slug, '', plugin_dir_url(__FILE__) . 'assets/img/logo-wp.png', 57);
 
-					// #4. Getting the timeslots html			
-					$timeSlots = $this->get_hospital_available_times( $hospitalId, $reasonDescription );
+    add_submenu_page($menu_slug, $menu_name, $menu_main, 'manage_options', $menu_slug, array(
+      $this,
+      'clockmd_settings_page'
+    ));
 
-					$str .= "<div class='col-md-12'>
-							<img src='".$this->clockwiselogo."'>
-							<center>
-								<h4>".$hospital['name']."</h4>
-								<div>".$hospital['full_address']."</div>
-								<div>".$hospital['phone_number']."</div>
-								<p><div>Please Note: you can also try one of our other nearby clinics</div></p>
-								<p><div>Please complete the information below to hold a place in line!</div>
-								<div>Note that all times are estimates only.</div>
-								<div>But first, please make sure you don't <a href='https://www.911.gov/needtocallortext911.html' target='_blank'>need to call 911</a></div></p>
-							</center>
-						</div>";				
+    add_submenu_page($menu_slug, "Alert Notices", "Alert Notices", 'manage_options', "alert_notices", array(
+      $this,
+      'clockmd_settings_page'
+    ));
+  }
 
-					// If appointmenterror and msg is set then show notification bar
-					if ( !empty($_GET['errmsg']) ) {
-						$str .= '<div class="col-md-12"><div class="alert alert-danger" role="alert">'.$_GET['errmsg'].'</div></div>';
-					}
-					$str .= $this->getAppointmentForm( $select, $timeSlots );	
-				}
-				else {
-					$str .= '<div class="col-md-12"><center>There are no times available for online scheduling right now. During normal office hours, just come in to the facility we will see you as a regular walk in.Note: This message will be shown when there are no online visit times available (the clinic is full past their configured time for online patients OR the clinic is closed).</center></div>';
-				}
-			}
-		}
-		else {
-			$str .= "<div class='col-md-12'>No Hospital Id</div>";
-		}
-		$str .= "</div>";
-		$str .= "</div>";
-		return $str;
-	}
+  function clockmd_settings_page()
+  {
+    include_once 'Pages/Admin/settings.php';
+  }
 
-	function getAppointmentForm( $dropDown, $timeslots ) {
-		// date_default_timezone_set("Asia/Bangkok");
-		return '<div id="AppointmentFormWrapper" class="col-md-12">
-			<form action="" method="post" onsubmitt="return getAppointmentData(this)">
-				<div class="form-group row">
-				    <div class="col-md-12">
-				    <label class="form-check-label"><b>Select a visit reason:</b></label>
-				    	'.$dropDown.'
-				    </div>
-			  	</div>
-				<div class="form-group row">
-				    <div class="col-md-6">
-				    	<label class="form-check-label">First Name</label>
-				      	<input required type="text" name="appointment[first_name]" class="form-control" placeholder="First name">
-				    </div>
-				    <div class="col-md-6">
-				    	<label class="form-check-label">Last Name</label>
-				      	<input required type="text" name="appointment[last_name]" class="form-control" placeholder="Last name">
-				    </div>
-			  	</div>
-			  	'.$timeslots.'			  	
-			  	<div class="form-group row">
-				    <div class="col-md-6">
-				    	<label class="form-check-label">Email</label>
-				      	<input required type="email" name="appointment[email]" class="form-control" placeholder="Email">
-				    </div>
-				    <div class="col-md-6">
-				    	<label class="form-check-label">Phone Number</label>
-				      	<input type="tel" name="appointment[phone_number]" class="form-control">
-				    </div>
-			  	</div>
-			  	<div class="form-group row">
-				    <div class="col-md-6">
-				    	<label class="form-check-label">Patient Type</label>
-				      	<select required class="form-control form-control-lg" name="appointment[is_new_patient]">
-							<option value="">Patient Type</option>
-							<option value="true">New Patient</option>
-							<option value="false">Existing Patient</option>
-						</select>
-				    </div>
-				    <div class="col-md-6">
-				    	<label class="form-check-label">Date of Birth</label>				    	
-				      	<input required type="date" name="appointment[dob]" class="form-control">
-				    </div>
-			  	</div>
-			  	<div class="form-group row">
-				    <div class="col-md-12">
-				        <button class="btn btn-primary" type="submit">Submit form</button>
-				    </div>
-			  	</div>
-			</form>
-		</div>
-		<script>
-		jQuery(document).ready(function(){
-		  var phones = [{ "mask": "(###) ###-####"}];
-		  jQuery(`input[name="appointment[phone_number]"]`).inputmask({
-			mask: phones, 
-			greedy: false, 
-			definitions: { "#": { validator: "[0-9]", cardinality: 1}} 
-			})
-		})
-		</script>';
-	}
+  function getSsfUploadDir( $edit ) {
+    $ssf_wp_uploads = wp_upload_dir();
+    if ( is_ssl() ) {
+      $ssf_wp_uploads = str_replace( 'http://', 'https://', $ssf_wp_uploads );
+    }
+    $dir = $ssf_wp_uploads['basedir']."/ssf-wp-uploads/images/".$edit."/";
+    if ( is_dir($dir) ) {
+      $image_upload_path = "../wp-content/uploads/ssf-wp-uploads/images/";
+      $images = @scandir($dir);
+      foreach($images as $k => $v):
+      endforeach;
 
-	function get_hospital_available_times( $hospitalId, $reason_description ) {
-		/**
-		* Generating the API Path with Query string
-		**/
-		$requestPath  = '/hospitals/'.$hospitalId.'/available_times';
-		$requestPath .= '?';
-		$requestPath .= http_build_query(array(
-			'slot_type' => 'online',
-			'reason_description' => $reason_description
-		));
-
-		/**
-		* Calling the generated API
-		**/
-		$timeSlots = $this->get_with_authorization( $requestPath );
-
-		/**
-		* Creating the variables
-		**/
-		$timeSlotsHtml 		= "";
-		$todayDate 			= date("m/d/Y");
-		$nextDayTimeStamp 	= strtotime("+1 day");
-		$nextDate  			= date("m/d/Y", $nextDayTimeStamp);
-		$todayTimeStamp	  	= strtotime(date("m/d/Y"));
-
-		/**
-		* Generating all Dropdowns with target Id so that it can be hide/show using jquery
-		**/
-	  	$timeOptions = "";
-		foreach ($timeSlots as $i => $times) {
-			foreach ($times as $j => $t) {
-				$date = strtotime($t['date']);
-				foreach ($t['times'] as $k => $ts) {
-					if ( $todayTimeStamp == $date ) {
-			  			$timeOptions .= '<option data-target-date="'.$date.'" value="'.$ts['time'].'">'.$ts['display_time'].'</option>';
-					} else {
-			  			$timeOptions .= '<option style="display:none" data-target-date="'.$date.'" value="'.$ts['time'].'">'.$ts['display_time'].'</option>';
-					}
-				}
-			}			
-		}
-
-		$timeSlotsHtml .= '<div class="form-group row">
-		    <div class="col-md-6">
-				<label class="form-check-label">Appointment Date</label>
-		    	<select required onchange="updateOption(this)" class="form-control form-control-lg" name="appointment[days_from_today]">
-					<option data-targetOptionGroup="'.$todayTimeStamp.'" value="0">Today - '.$todayDate.'</option>
-					<option data-targetOptionGroup="'.$nextDayTimeStamp.'" value="1">Tomorrow - '.$nextDate.'</option>
-				</select>
-		    </div>
-		    <div class="col-md-6">
-		    	<label class="form-check-label">Appointment Time</label>
-		    	<select required class="form-control form-control-lg apt_time" name="appointment[apt_time]">
-		    		<option value="">-- Select --</option>
-		    		'.$timeOptions.'
-		    	</select>
-		    </div>
-	  	</div>';
-
-	  	return $timeSlotsHtml;
-	}
-
-	function clockmd_show_hospitals_with_map_cb() {
-		return 'This shortcode has been disabled';
-		// return '<div>
-		// 	<div class="groups-map" id="map-panel">
-		// 	   <div class="address-box" id="panel">
-		// 	      <div class="row-fluid" style="display:flex;flex-direction:row;">
-		// 	         <input style="flex-grow:10;height:5%;" id="address" placeholder="Current Address" type="text" value="" />
-		// 	         <input style="flex-grow:1;" class="btn btn-primary" id="address-search-btn" onclick="codeAddress()" type="button" value="Search Nearby" />
-		// 	         &nbsp;
-		// 	         <input style="flex-grow:1;" class="btn btn-primary" id="current-location-btn" onclick="findPosition()" style="display:none;" type="button" value="Use My Location" />
-		// 	         &nbsp;
-		// 	         <input class="btn btn-danger" id="clear-address-btn" onclick="reDrawMap()" style="display:none;flex-grow:1;" type="button" value="Clear Search" />
-		// 	      </div>
-		// 	   </div>
-		// 	   <div class="row-fluid row-fluid_maps">
-		// 	      <div id="map-canvas">
-		// 	      </div>
-		// 	      <div class="directions-panel" id="directionsPanel" style="float:right;height:65%;display:none">
-		// 	      </div>
-		// 	      <div class="directions-clinic-info" id="clinicInfo" style="float:right;height:35%;display:none">
-		// 	      </div>
-		// 	   </div>
-		// 	</div>
-		// 	<div class="row-fluid row-fluid_maps" id="group-hospital-list"></div>
-		// 	<div style="display:none;">
-		// 	   <!-- This is a clockwise mustache.js template. For more info goto https://mustache.github.io/ -->
-		// 	   <script id="map_full_hospital" type="text/template">
-		// 	      <div class="map-window-full" id="hospital-window-{{id}}">
-		// 	        <h5 class="opensans"><strong>{{{hospital_name_link}}}</strong></h5>
-		// 	        <h5 class="opensans">{{{drive_time}}}</h5>
-		// 	        <h5 class="opensans"><strong class="current_wait_placeholder">{{{current_queue_length}}}</strong>&nbsp;in line.</h5>
-		// 	        <h5 class="opensans">{{{address_1}}}</h5>
-		// 	        <h5 class="opensans">{{{address_2}}}</h5>
-		// 	        <h5 class="opensans">{{{city}}}, {{{state}}} {{{zip}}}</h5>
-		// 	        <h5 class="opensans">{{{phone_number}}}</h5>{{{schedule_button}}}
-		// 	      </div>
-		// 	   </script>
-		// 	   <script id="map_wait_window" type="text/template">
-		// 	      <div class="map-window-wait" id="hospital-window-{{id}}">
-		// 	        <h5 class="opensans"><strong>{{{hospital_name_link}}}</strong></h5>
-		// 	        <h5 class="opensans">{{{drive_time}}}</h5>
-		// 	        <h5 class="opensans"><strong class="current_wait_placeholder">{{{current_queue_length}}}</strong>&nbsp;in line.</h5>
-		// 	      </div>
-		// 	   </script>
-		// 	   <script id="list_full_hospital" type="text/template">
-		// 	      <div class="span4 margin-group margin-top text-center" id="list-hospital-{{id}}" style="height:300px">
-		// 	        <h4 class="opensans">
-		// 	          <a class="map-tooltip" onclick="focusMap({{id}})" target="_blank" title="">
-		// 	            <img src="{{icon_url}}" />&nbsp;
-		// 	          </a><strong>{{{hospital_name_link}}}</strong>
-		// 	        </h4>
-		// 	        <h4 class="opensans drive_time_header">{{{drive_time}}}</h4>
-		// 	        <h4 class="opensans"><strong class="current_wait_placeholder">{{{current_queue_length}}}</strong>&nbsp;in line.</h4><h4 class="opensans">{{{address_1}}}</h4>
-		// 	        <h4 class="opensans">{{{address_2}}}</h4>
-		// 	        <h4 class="opensans">{{{city}}}, {{{state}}} {{{zip}}}</h4>
-		// 	        <h4 class="opensans">{{{phone_number}}}</h4>{{{schedule_button}}}
-		// 	      </div>
-		// 	   </script>
-		// 	   <!-- This is the end of the mustache.js template -->
-		// 	</div>
-		// </div>';
-	}
-
-	function clockmd_menu_pages() {
-		$menu_name 	= 'ClockMD Settings';
-		$menu_slug 	= 'clockmd__settings';
-		$menu_main 	= 'ClockMD Settings';
-
-		add_menu_page($menu_name, $menu_main, 'manage_options', $menu_slug, '', plugin_dir_url(__FILE__).'assets/img/logo-wp.png', 57);
-
-		add_submenu_page( $menu_slug, $menu_name, $menu_main, 'manage_options', $menu_slug, array($this, 'clockmd_settings_page'));		
-	}
-
-	function clockmd_settings_page() {
-		include_once 'Pages/Admin/settings.php';
-	}
-
+      return $image_upload_path.$edit.'/'.$v;
+    }
+    else {
+      return null;
+    }
+  }
 }
 
 Clockmd::get_instance();

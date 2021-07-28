@@ -20,7 +20,7 @@ div.card {
 div.col-md-12 {
 	text-align:center;
 }
-.page-id-1361 body:not(.et-tb) #main-content .container, body:not(.et-tb-has-header) #main-content .container {
+.page-id-1493 body:not(.et-tb) #main-content .container, body:not(.et-tb-has-header) #main-content .container {
 	padding-top: 0px !important;
 }
 div.alert.alert-success {
@@ -29,3 +29,126 @@ div.alert.alert-success {
 	text-align:center;
 }
 /**END SCHEDULING CSS**/
+#appointment_error_message {
+    color: red;
+    font-style: italic;
+    margin-left: 5px;
+}
+
+.container.appointments-container {
+  width: 100%;
+}
+
+.appointments-form-header h4 {
+  text-align: center;
+  font-weight: 600;
+  padding-bottom: 20px;
+}
+
+.appointments-form-header .appointments-address a {
+  color: #212529;
+  font-weight: 700;
+  display: -webkit-box;
+  display: -ms-flexbox;
+  display: flex;
+  -webkit-box-pack: center;
+      -ms-flex-pack: center;
+          justify-content: center;
+  -ms-flex-wrap: wrap;
+      flex-wrap: wrap;
+}
+
+.appointments-form-header .appointments-address a:hover {
+  text-decoration: underline;
+}
+
+.appointments-form-header .appointments-tel a {
+  color: #212529;
+  font-weight: 700;
+  display: -webkit-box;
+  display: -ms-flexbox;
+  display: flex;
+  -ms-flex-wrap: wrap;
+      flex-wrap: wrap;
+  -webkit-box-pack: center;
+      -ms-flex-pack: center;
+          justify-content: center;
+  margin-bottom: 16px;
+}
+
+.appointments-form-header .appointments-tel a:hover {
+  text-decoration: underline;
+}
+
+.appointments-form-info p {
+  font-size: 1rem;
+  font-weight: 400;
+  line-height: 1.5;
+  color: #212529;
+}
+
+.appointments-form .form-check-label {
+  font-size: 1rem;
+  font-weight: 400;
+  line-height: 1.5;
+  color: #212529;
+  text-align: left;
+  display: inline-block;
+  width: 100%;
+  margin-bottom: .5rem;
+}
+
+.appointments-form .form-control {
+  border: 1px solid #ced4da;
+  padding: .375rem .75rem;
+  font-size: 1rem;
+  font-weight: 400;
+  line-height: 1.5;
+  color: #495057;
+}
+
+.appointments-form .form-control:active, .appointments-form .form-control:focus {
+  -webkit-box-shadow: none;
+          box-shadow: none;
+}
+
+.appointments-form .appointments-visit-time .btn:active, .appointments-form .appointments-visit-time .btn:focus {
+  -webkit-box-shadow: none;
+          box-shadow: none;
+}
+
+.appointments-form .appointments-visit-time .btn.select-option-btn {
+  color: #fff;
+  background-color: #007bff;
+  border-color: #007bff;
+}
+/*# sourceMappingURL=scheduling.css.map */
+
+.displaynone {
+    display: none !important;
+}
+
+@media only screen and (max-width: 600px) {
+    #AppointmentFormWrapper div.col-sm-12 {
+        padding-left: 0px;
+        padding-right: 0px;
+    }
+    .resmbottom {
+    	margin-bottom: 1rem;
+    }
+    .mobrow{        
+        display: flex;        
+        flex-wrap: wrap;
+        margin-right: -15px;
+        margin-left: -15px;
+    }
+    .mob-appointments-visit-time {
+        flex-wrap: wrap;
+        margin-right: -15px;
+        margin-left: -15px;
+    }
+}
+.dropdownMenuMaxheight {
+	max-height: 480px;
+    overflow-y: scroll;
+}
